@@ -122,8 +122,52 @@ namespace Blyat
         private void SetupGameEvents()
         {
             // Register Game Event Handlers
+            RegisterEventHandler<EventPlayerConnect>(GenericEventHandler, HookMode.Pre);
+            RegisterEventHandler<EventPlayerBlind>(GenericEventHandler);
+
+            // Mirrors a chat message back to the player
+            RegisterEventHandler<EventPlayerChat>(((@event, _) =>
+            {
+                var player = Utilities.GetPlayerFromIndex(@event.Userid);
+                if (player == null) return HookResult.Continue;
+
+                player.PrintToChat($"You said {@event.Text}");
+                return HookResult.Continue;
+            }));
         }
 
+
+        private void SetupEntityOutputHooks()
+        {
+            HookEntityOutput("weapon_knife", "OnPlayerPickup", (output, _, activator, caller, _, delay) =>
+            {
+                Logger.LogInformation("weapon_knife called OnPlayerPickup ({name}, {activator}, {caller}, {delay})", output.Description.Name, activator.DesignerName, caller.DesignerName, delay);
+
+                return HookResult.Continue;
+            });
+
+            HookEntityOutput("*", "*", (output, _, activator, caller, _, delay) =>
+            {
+                Logger.LogInformation("All EntityOutput ({name}, {activator}, {caller}, {delay})", output.Description.Name, activator.DesignerName, caller.DesignerName, delay);
+
+                return HookResult.Continue;
+            });
+
+            HookEntityOutput("*", "OnStartTouch", (_, name, activator, caller, _, delay) =>
+            {
+                Logger.LogInformation("OnStartTouch: ({name}, {activator}, {caller}, {delay})", name, activator.DesignerName, caller.DesignerName, delay);
+
+                return HookResult.Continue;
+            });
+        }
+
+        private HookResult GenericEventHandler<T>(T @event, GameEventInfo info) where T : GameEvent
+        {
+            Logger.LogInformation("Event found {Pointer:X}, event name: {EventName}, dont broadcast: {DontBroadcast}",
+                @event.Handle, @event.EventName, info.DontBroadcast);
+
+            return HookResult.Continue;
+        }
 
         public override void Unload(bool hotReload)
         {
