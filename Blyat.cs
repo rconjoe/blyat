@@ -134,6 +134,110 @@ namespace Blyat
                 player.PrintToChat($"You said {@event.Text}");
                 return HookResult.Continue;
             }));
+
+            RegisterEventHandler<EventPlayerDeath>((@event, info) =>
+            {
+                // you can use info.DontBroadcast to set the don't broadcast flag on the event.
+                if (new Random().NextSingle() > 0.5f)
+                {
+                    @event.Attacker?.PrintToChat($"Skipping player_death broadcast at {Server.CurrentTime}");
+                    info.DontBroadcast = true;
+                }
+
+                if (@event.Attacker != null)
+                {
+                    var message = UserMessage.FromPartialName("Shake");
+                    Logger.LogInformation("Created user message CCSUsrMsg_Shake {Message:x}", message.Handle);
+
+                    message.SetFloat("duration", 2);
+                    message.SetFloat("amplitude", 5);
+                    message.SetFloat("frequency", 10f);
+                    message.SetInt("command", 0);
+
+                    message.Send(@event.Attacker);
+                }
+
+                return HookResult.Continue;
+            }, HookMode.Pre);
+
+            RegisterEventHandler<EventGrenadeBounce>((@event, info) =>
+            {
+                Logger.LogInformation("Player {Player} grenade bounce", @event.Userid!.PlayerName);
+
+                return HookResult.Continue;
+            }, HookMode.Pre);
+
+            RegisterEventHandler<EventPlayerSpawn>((@event, info) =>
+            {
+                var player = @event.Userid;
+                var playerPawn = player?.PlayerPawn.Get();
+                if (player == null || playerPawn == null) return HookResult.Continue;
+
+                Logger.LogInformation("Player spawned with entity index: {EntityIndex} & User ID: {UserId}",
+                        playerPawn.Index, player.UserId);
+
+                return HookResult.Continue;
+            });
+
+            RegisterEventHandler<EventBulletImpact>((@event, info) =>
+            {
+                var player = @event.Userid;
+                var pawn = player?.PlayerPawn.Get();
+                var activeWeapon = pawn?.WeaponServices?.ActiveWeapon.Get();
+
+                if (pawn == null) return HookResult.Continue;
+
+                Server.NextFrame(() =>
+                {
+                    player?.PrintToChat(activeWeapon?.DesignerName ?? "no active weapon");
+                });
+
+                // set player to random color
+                pawn.Render = Color.FromArgb(Random.Shared.Next(0, 255),
+                        Random.Shared.Next(0, 255), Random.Shared.Next(0, 255));
+                Utilities.SetStateChanged(pawn, "CBaseModelEntity", "m_clrRender");
+
+                // give player 5 health and set their reserve ammo to 250
+                if (activeWeapon != null)
+                {
+                    activeWeapon.ReserveAmmo[0] = 250;
+                    activeWeapon.Clip1 = 250;
+                }
+
+                pawn.Health += 5;
+                Utilities.SetStateChanged(pawn, "CBaseEntity", "m_iHealth");
+
+                return HookResult.Continue;
+            });
+        }
+
+
+        private void SetupCommands()
+        {
+            // adds new server console command
+            AddCommand("blyat_info", "a test command",
+                (player, info) =>
+                {
+                    if (player == null) return;
+                    Logger.LogInformation(
+                        "Blyat - a test command was called by {SteamID2} with {Arguments}",
+                        ((SteamID)player.SteamID).SteamId2, info.ArgString);
+                });
+
+            AddCommand("css_changeteam", "change team", (player, _) =>
+            {
+                if (player == null) return;
+
+                player.ChangeTeam((CsTeam)player.TeamNum == CsTeam.Terrorist ? CsTeam.CounterTerrorist : CsTeam.Terrorist);
+            });
+
+            // listens for any client use of the command "jointeam"
+            AddCommandListener("jointeam", (player, info) =>
+            {
+                Logger.LogInformation("{PlayerName} just did a jointeam (pre) [{ArgString}]", player?.PlayerName, info.ArgString);
+
+                return HookResult.Continue;
+            });
         }
 
 
