@@ -20,14 +20,14 @@ using Microsoft.Extensions.Logging;
 
 namespace Blyat
 {
-
     public class SampleConfig : BasePluginConfig
     {
-        [JsonPropertyName("IsPluginEnabled")] public bool IsPluginEnabled { get; set; } = true;
+        [JsonPropertyName("IsPluginEnabled")]
+        public bool IsPluginEnabled { get; set; } = true;
 
-        [JsonPropertyName("LogPrefix")] public string LogPrefix { get; set; } = "BlyatPlugin";
+        [JsonPropertyName("LogPrefix")]
+        public string LogPrefix { get; set; } = "BlyatPlugin";
     }
-
 
     [MinimumApiVersion(80)]
     public class BlyatPlugin : BasePlugin, IPluginConfig<SampleConfig>
@@ -36,7 +36,6 @@ namespace Blyat
         public override string ModuleVersion => "1.0.0";
         public override string ModuleAuthor => "rconjoe";
         public override string ModuleDescription => "A playground where I break things";
-
 
         public SampleConfig Config { get; set; } = null!;
 
@@ -62,13 +61,18 @@ namespace Blyat
                 return;
             }
 
-            Logger.LogInformation($"{ModuleName} loaded, hot reload flag is {hotReload}, path is {ModulePath}");
+            Logger.LogInformation(
+                $"{ModuleName} loaded, hot reload flag is {hotReload}, path is {ModulePath}"
+            );
 
-            VirtualFunctions.SwitchTeamFunc.Hook(hook =>
-            {
-                Logger.LogInformation("Switch team func called");
-                return HookResult.Continue;
-            }, HookMode.Pre);
+            VirtualFunctions.SwitchTeamFunc.Hook(
+                hook =>
+                {
+                    Logger.LogInformation("Switch team func called");
+                    return HookResult.Continue;
+                },
+                HookMode.Pre
+            );
 
             SetupConvars();
 
@@ -77,8 +81,10 @@ namespace Blyat
             Logger.LogInformation("Server pointer found @ {Pointer:X}", server.Pointer);
 
             // Use `ModuleDirectory` to get the directory of the plugin for things like config files
-            File.WriteAllText(Path.Join(ModuleDirectory, "example.txt"),
-                    $"Test file created by BlyatPlugin at ${DateTime.Now}");
+            File.WriteAllText(
+                Path.Join(ModuleDirectory, "example.txt"),
+                $"Test file created by BlyatPlugin at ${DateTime.Now}"
+            );
 
             // Execute a server command as if typed into the server console.
             Server.ExecuteCommand("meta list");
@@ -94,12 +100,10 @@ namespace Blyat
             // _testInjectedClass.Hello();
         }
 
-
         public override void OnAllPluginsLoaded(bool hotReload)
         {
             Logger.LogInformation("All plugins loaded!!");
         }
-
 
         private void SetupConvars()
         {
@@ -108,7 +112,10 @@ namespace Blyat
                 ConVar.Find("sv_cheats")?.SetValue(true);
 
                 var numericCvar = ConVar.Find("mp_warmuptime");
-                Logger.LogInformation("mp_warmuptime = {Value}", numericCvar?.GetPrimitiveValue<float>());
+                Logger.LogInformation(
+                    "mp_warmuptime = {Value}",
+                    numericCvar?.GetPrimitiveValue<float>()
+                );
 
                 var stringCvar = ConVar.Find("sv_skyname");
                 Logger.LogInformation("sv_skyname = {Value}", stringCvar?.StringValue);
@@ -118,7 +125,6 @@ namespace Blyat
             });
         }
 
-
         private void SetupGameEvents()
         {
             // Register Game Event Handlers
@@ -126,149 +132,235 @@ namespace Blyat
             RegisterEventHandler<EventPlayerBlind>(GenericEventHandler);
 
             // Mirrors a chat message back to the player
-            RegisterEventHandler<EventPlayerChat>(((@event, _) =>
-            {
-                var player = Utilities.GetPlayerFromIndex(@event.Userid);
-                if (player == null) return HookResult.Continue;
+            RegisterEventHandler<EventPlayerChat>(
+                (
+                    (@event, _) =>
+                    {
+                        var player = Utilities.GetPlayerFromIndex(@event.Userid);
+                        if (player == null)
+                            return HookResult.Continue;
 
-                player.PrintToChat($"You said {@event.Text}");
-                return HookResult.Continue;
-            }));
+                        player.PrintToChat($"You said {@event.Text}");
+                        return HookResult.Continue;
+                    }
+                )
+            );
 
-            RegisterEventHandler<EventPlayerDeath>((@event, info) =>
-            {
-                // you can use info.DontBroadcast to set the don't broadcast flag on the event.
-                if (new Random().NextSingle() > 0.5f)
+            RegisterEventHandler<EventPlayerDeath>(
+                (@event, info) =>
                 {
-                    @event.Attacker?.PrintToChat($"Skipping player_death broadcast at {Server.CurrentTime}");
-                    info.DontBroadcast = true;
+                    // you can use info.DontBroadcast to set the don't broadcast flag on the event.
+                    if (new Random().NextSingle() > 0.5f)
+                    {
+                        @event.Attacker?.PrintToChat(
+                            $"Skipping player_death broadcast at {Server.CurrentTime}"
+                        );
+                        info.DontBroadcast = true;
+                    }
+
+                    if (@event.Attacker != null)
+                    {
+                        var message = UserMessage.FromPartialName("Shake");
+                        Logger.LogInformation(
+                            "Created user message CCSUsrMsg_Shake {Message:x}",
+                            message.Handle
+                        );
+
+                        message.SetFloat("duration", 2);
+                        message.SetFloat("amplitude", 5);
+                        message.SetFloat("frequency", 10f);
+                        message.SetInt("command", 0);
+
+                        message.Send(@event.Attacker);
+                    }
+
+                    return HookResult.Continue;
+                },
+                HookMode.Pre
+            );
+
+            RegisterEventHandler<EventGrenadeBounce>(
+                (@event, info) =>
+                {
+                    Logger.LogInformation(
+                        "Player {Player} grenade bounce",
+                        @event.Userid!.PlayerName
+                    );
+
+                    return HookResult.Continue;
+                },
+                HookMode.Pre
+            );
+
+            RegisterEventHandler<EventPlayerSpawn>(
+                (@event, info) =>
+                {
+                    var player = @event.Userid;
+                    var playerPawn = player?.PlayerPawn.Get();
+                    if (player == null || playerPawn == null)
+                        return HookResult.Continue;
+
+                    Logger.LogInformation(
+                        "Player spawned with entity index: {EntityIndex} & User ID: {UserId}",
+                        playerPawn.Index,
+                        player.UserId
+                    );
+
+                    return HookResult.Continue;
                 }
+            );
 
-                if (@event.Attacker != null)
+            RegisterEventHandler<EventBulletImpact>(
+                (@event, info) =>
                 {
-                    var message = UserMessage.FromPartialName("Shake");
-                    Logger.LogInformation("Created user message CCSUsrMsg_Shake {Message:x}", message.Handle);
+                    var player = @event.Userid;
+                    var pawn = player?.PlayerPawn.Get();
+                    var activeWeapon = pawn?.WeaponServices?.ActiveWeapon.Get();
 
-                    message.SetFloat("duration", 2);
-                    message.SetFloat("amplitude", 5);
-                    message.SetFloat("frequency", 10f);
-                    message.SetInt("command", 0);
+                    if (pawn == null)
+                        return HookResult.Continue;
 
-                    message.Send(@event.Attacker);
+                    Server.NextFrame(() =>
+                    {
+                        player?.PrintToChat(activeWeapon?.DesignerName ?? "no active weapon");
+                    });
+
+                    // set player to random color
+                    pawn.Render = Color.FromArgb(
+                        Random.Shared.Next(0, 255),
+                        Random.Shared.Next(0, 255),
+                        Random.Shared.Next(0, 255)
+                    );
+                    Utilities.SetStateChanged(pawn, "CBaseModelEntity", "m_clrRender");
+
+                    // give player 5 health and set their reserve ammo to 250
+                    if (activeWeapon != null)
+                    {
+                        activeWeapon.ReserveAmmo[0] = 250;
+                        activeWeapon.Clip1 = 250;
+                    }
+
+                    pawn.Health += 5;
+                    Utilities.SetStateChanged(pawn, "CBaseEntity", "m_iHealth");
+
+                    return HookResult.Continue;
                 }
-
-                return HookResult.Continue;
-            }, HookMode.Pre);
-
-            RegisterEventHandler<EventGrenadeBounce>((@event, info) =>
-            {
-                Logger.LogInformation("Player {Player} grenade bounce", @event.Userid!.PlayerName);
-
-                return HookResult.Continue;
-            }, HookMode.Pre);
-
-            RegisterEventHandler<EventPlayerSpawn>((@event, info) =>
-            {
-                var player = @event.Userid;
-                var playerPawn = player?.PlayerPawn.Get();
-                if (player == null || playerPawn == null) return HookResult.Continue;
-
-                Logger.LogInformation("Player spawned with entity index: {EntityIndex} & User ID: {UserId}",
-                        playerPawn.Index, player.UserId);
-
-                return HookResult.Continue;
-            });
-
-            RegisterEventHandler<EventBulletImpact>((@event, info) =>
-            {
-                var player = @event.Userid;
-                var pawn = player?.PlayerPawn.Get();
-                var activeWeapon = pawn?.WeaponServices?.ActiveWeapon.Get();
-
-                if (pawn == null) return HookResult.Continue;
-
-                Server.NextFrame(() =>
-                {
-                    player?.PrintToChat(activeWeapon?.DesignerName ?? "no active weapon");
-                });
-
-                // set player to random color
-                pawn.Render = Color.FromArgb(Random.Shared.Next(0, 255),
-                        Random.Shared.Next(0, 255), Random.Shared.Next(0, 255));
-                Utilities.SetStateChanged(pawn, "CBaseModelEntity", "m_clrRender");
-
-                // give player 5 health and set their reserve ammo to 250
-                if (activeWeapon != null)
-                {
-                    activeWeapon.ReserveAmmo[0] = 250;
-                    activeWeapon.Clip1 = 250;
-                }
-
-                pawn.Health += 5;
-                Utilities.SetStateChanged(pawn, "CBaseEntity", "m_iHealth");
-
-                return HookResult.Continue;
-            });
+            );
         }
-
 
         private void SetupCommands()
         {
             // adds new server console command
-            AddCommand("blyat_info", "a test command",
+            AddCommand(
+                "blyat_info",
+                "a test command",
                 (player, info) =>
                 {
-                    if (player == null) return;
+                    if (player == null)
+                        return;
                     Logger.LogInformation(
                         "Blyat - a test command was called by {SteamID2} with {Arguments}",
-                        ((SteamID)player.SteamID).SteamId2, info.ArgString);
-                });
+                        ((SteamID)player.SteamID).SteamId2,
+                        info.ArgString
+                    );
+                }
+            );
 
-            AddCommand("css_changeteam", "change team", (player, _) =>
-            {
-                if (player == null) return;
+            AddCommand(
+                "css_changeteam",
+                "change team",
+                (player, _) =>
+                {
+                    if (player == null)
+                        return;
 
-                player.ChangeTeam((CsTeam)player.TeamNum == CsTeam.Terrorist ? CsTeam.CounterTerrorist : CsTeam.Terrorist);
-            });
+                    player.ChangeTeam(
+                        (CsTeam)player.TeamNum == CsTeam.Terrorist
+                            ? CsTeam.CounterTerrorist
+                            : CsTeam.Terrorist
+                    );
+                }
+            );
 
             // listens for any client use of the command "jointeam"
-            AddCommandListener("jointeam", (player, info) =>
-            {
-                Logger.LogInformation("{PlayerName} just did a jointeam (pre) [{ArgString}]", player?.PlayerName, info.ArgString);
+            AddCommandListener(
+                "jointeam",
+                (player, info) =>
+                {
+                    Logger.LogInformation(
+                        "{PlayerName} just did a jointeam (pre) [{ArgString}]",
+                        player?.PlayerName,
+                        info.ArgString
+                    );
 
-                return HookResult.Continue;
-            });
+                    return HookResult.Continue;
+                }
+            );
         }
-
 
         private void SetupEntityOutputHooks()
         {
-            HookEntityOutput("weapon_knife", "OnPlayerPickup", (output, _, activator, caller, _, delay) =>
-            {
-                Logger.LogInformation("weapon_knife called OnPlayerPickup ({name}, {activator}, {caller}, {delay})", output.Description.Name, activator.DesignerName, caller.DesignerName, delay);
+            HookEntityOutput(
+                "weapon_knife",
+                "OnPlayerPickup",
+                (output, _, activator, caller, _, delay) =>
+                {
+                    Logger.LogInformation(
+                        "weapon_knife called OnPlayerPickup ({name}, {activator}, {caller}, {delay})",
+                        output.Description.Name,
+                        activator.DesignerName,
+                        caller.DesignerName,
+                        delay
+                    );
 
-                return HookResult.Continue;
-            });
+                    return HookResult.Continue;
+                }
+            );
 
-            HookEntityOutput("*", "*", (output, _, activator, caller, _, delay) =>
-            {
-                Logger.LogInformation("All EntityOutput ({name}, {activator}, {caller}, {delay})", output.Description.Name, activator.DesignerName, caller.DesignerName, delay);
+            HookEntityOutput(
+                "*",
+                "*",
+                (output, _, activator, caller, _, delay) =>
+                {
+                    Logger.LogInformation(
+                        "All EntityOutput ({name}, {activator}, {caller}, {delay})",
+                        output.Description.Name,
+                        activator.DesignerName,
+                        caller.DesignerName,
+                        delay
+                    );
 
-                return HookResult.Continue;
-            });
+                    return HookResult.Continue;
+                }
+            );
 
-            HookEntityOutput("*", "OnStartTouch", (_, name, activator, caller, _, delay) =>
-            {
-                Logger.LogInformation("OnStartTouch: ({name}, {activator}, {caller}, {delay})", name, activator.DesignerName, caller.DesignerName, delay);
+            HookEntityOutput(
+                "*",
+                "OnStartTouch",
+                (_, name, activator, caller, _, delay) =>
+                {
+                    Logger.LogInformation(
+                        "OnStartTouch: ({name}, {activator}, {caller}, {delay})",
+                        name,
+                        activator.DesignerName,
+                        caller.DesignerName,
+                        delay
+                    );
 
-                return HookResult.Continue;
-            });
+                    return HookResult.Continue;
+                }
+            );
         }
 
-        private HookResult GenericEventHandler<T>(T @event, GameEventInfo info) where T : GameEvent
+        private HookResult GenericEventHandler<T>(T @event, GameEventInfo info)
+            where T : GameEvent
         {
-            Logger.LogInformation("Event found {Pointer:X}, event name: {EventName}, dont broadcast: {DontBroadcast}",
-                @event.Handle, @event.EventName, info.DontBroadcast);
+            Logger.LogInformation(
+                "Event found {Pointer:X}, event name: {EventName}, dont broadcast: {DontBroadcast}",
+                @event.Handle,
+                @event.EventName,
+                info.DontBroadcast
+            );
 
             return HookResult.Continue;
         }
